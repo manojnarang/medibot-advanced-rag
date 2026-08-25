@@ -1,0 +1,26 @@
+# --- Python / backend ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+backend/.env
+/.env
+
+# --- Node / frontend ---
+node_modules/
+.next/
+out/
+frontend/.env.local
+
+# --- Data (never commit PHI/documents or the database) ---
+*.db
+*.sqlite3
+
+# --- Editors / OS ---
+# .vscode/ is intentionally NOT ignored - settings.json/extensions.json are
+# committed to make the project easy to open and run for newcomers.
+.idea/
+.DS_Store
+Thumbs.db

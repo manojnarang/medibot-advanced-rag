@@ -1,0 +1,63 @@
+# Local dev environment. Run: docker compose up --build
+#
+# This starts the FastAPI backend (port 8000) and the Next.js frontend
+# (port 3000) in containers, so you don't need Python or Node.js installed
+# on the host at all for day-to-day development. See README.md.
+#
+# MEDIASSIST_DATA_PATH must point to the folder containing db/, billing/,
+# clinical/, nursing/, equipment/, general/ on YOUR machine - set it in a
+# root-level .env file (see .env.example). Docker Compose reads that .env
+# automatically to fill in ${MEDIASSIST_DATA_PATH} below.
+services:
+  api:
+    build:
+      context: ./backend
+    container_name: medibot-api
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overrides backend/.env: inside the container the dataset is always
+      # mounted at /data/mediassist_data, regardless of where it lives on
+      # the host.
+      MEDIASSIST_DATA_PATH: /data/mediassist_data
+      MEDIASSIST_DB_PATH: /data/mediassist_data/db/mediassist.db
+      CORS_ORIGINS: http://localhost:3010
+    volumes:
+      - ./backend:/app
+      - ${MEDIASSIST_DATA_PATH}:/data/mediassist_data:ro
+    ports:
+      # Host port 8010 (not 8000) to avoid clashing with other local projects.
+      - "8010:8000"
+
+  web:
+    build:
+      context: ./frontend
+    container_name: medibot-web
+    environment:
+      # Runs in the browser, so it must point at the host-mapped port, not
+      # the in-network container name.
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8010
+    command: sh -c "rm -rf .next && npm run dev"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      # Host port 3010 (not 3000) to avoid clashing with other local projects.
+      - "3010:3000"
+    depends_on:
+      - api
+
+  # Optional: only needed once you implement Components 1-3 (hybrid RAG).
+  # Start with: docker compose --profile ai up
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: medibot-qdrant
+    profiles: ["ai"]
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+volumes:
+  qdrant_storage:

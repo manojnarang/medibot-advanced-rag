@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "MediBot: Start (Docker)",
+      "type": "shell",
+      "command": "docker compose up --build",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "MediBot: Stop (Docker)",
+      "type": "shell",
+      "command": "docker compose down",
+      "problemMatcher": []
+    },
+    {
+      "label": "MediBot: View Logs (Docker)",
+      "type": "shell",
+      "command": "docker compose logs -f",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Backend: Run Tests (local venv)",
+      "type": "shell",
+      "command": "${workspaceFolder}/backend/.venv/Scripts/python.exe -m pytest -q",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    }
+  ]
+}

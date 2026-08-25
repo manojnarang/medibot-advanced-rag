@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-azuretools.vscode-docker",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss"
+  ]
+}

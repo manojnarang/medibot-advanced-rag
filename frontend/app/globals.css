@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  background-color: #f5f8f7;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd8d5 transparent;
+}

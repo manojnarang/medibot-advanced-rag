@@ -1,0 +1,62 @@
+"""Lightweight keyword heuristics used only to produce a *friendly* RBAC
+refusal message before hitting retrieval at all (e.g. "As a nurse, you don't
+have access to billing documents...").
+
+This is a UX nicety, NOT the security boundary. The real enforcement happens
+because `hybrid_rag_query` is only ever given the caller's
+`get_accessible_collections(role)` list, so a metadata-filtered vector query
+physically cannot return chunks outside it - even if a question sneaks past
+these keyword checks (e.g. a prompt-injection attempt), no restricted chunk
+is ever fetched or shown to the LLM.
+"""
+import re
+
+COLLECTION_KEYWORDS: dict[str, list[str]] = {
+    "billing": [
+        "billing", "insurance", "claim", "copay", "co-pay", "reimbursement",
+        "invoice", "cpt code", "premium", "deductible", "payer",
+    ],
+    "clinical": [
+        "drug formulary", "diagnostic protocol", "treatment protocol",
+        "dosage", "prescription guideline", "clinical protocol",
+    ],
+    "nursing": [
+        "icu procedure", "infection control", "nursing procedure",
+        "catheter care", "ward nursing",
+    ],
+    "equipment": [
+        "calibration", "equipment manual", "maintenance schedule",
+        "device maintenance", "ventilator manual",
+    ],
+}
+
+
+def find_restricted_collection_mention(question: str, allowed_collections: list[str]) -> str | None:
+    """Return the name of a restricted collection the question appears to be
+    asking about, or None if no obvious restricted-topic keyword is found."""
+    lowered = question.lower()
+    for collection, keywords in COLLECTION_KEYWORDS.items():
+        if collection in allowed_collections:
+            continue
+        for keyword in keywords:
+            if re.search(rf"\b{re.escape(keyword)}\b", lowered):
+                return collection
+    return None
+
+
+ANALYTICAL_KEYWORDS = [
+    "how many", "how much", "count", "total", "average", "avg", "sum",
+    "percentage", "percent", "number of", "statistics", "trend",
+    "escalated", "open tickets", "pending claims", "last month",
+    "this quarter", "compare", "breakdown",
+]
+
+
+def looks_analytical(question: str) -> bool:
+    """Very simple keyword heuristic to decide whether a question likely
+    needs SQL RAG (structured data) vs document RAG. Replace with an
+    LLM-based router if you want smarter classification - this is
+    intentionally non-AI so the endpoint works before Components 1-4 land.
+    """
+    lowered = question.lower()
+    return any(keyword in lowered for keyword in ANALYTICAL_KEYWORDS)
