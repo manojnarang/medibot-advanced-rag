@@ -49,19 +49,38 @@ def find_restricted_collection_mention(question: str, allowed_collections: list[
     return None
 
 
+# Generic "sounds like a numbers question" phrasing. On its own this is too
+# broad - "how many leaves do I have" would match just as well as "how many
+# claims were escalated" - so it must co-occur with a DOMAIN_KEYWORDS hit
+# below before being treated as analytical.
 ANALYTICAL_KEYWORDS = [
     "how many", "how much", "count", "total", "average", "avg", "sum",
     "percentage", "percent", "number of", "statistics", "trend",
-    "escalated", "open tickets", "pending claims", "last month",
-    "this quarter", "compare", "breakdown",
+    "compare", "breakdown",
+]
+
+# SQL RAG (Component 4) only ever queries the `claims` and `maintenance_tickets`
+# tables in mediassist.db - these are the actual columns/values in those two
+# tables (see app.db.sqlite.get_schema_summary()), so a question has to
+# plausibly be about one of them to count as analytical.
+DOMAIN_KEYWORDS = [
+    "claim", "claims", "insurer", "insurance", "diagnosis", "department",
+    "patient", "reimbursement", "billing", "escalated",
+    "ticket", "tickets", "equipment", "maintenance", "campus", "fault",
+    "calibration", "raised", "resolved",
 ]
 
 
 def looks_analytical(question: str) -> bool:
     """Very simple keyword heuristic to decide whether a question likely
-    needs SQL RAG (structured data) vs document RAG. Replace with an
+    needs SQL RAG (structured data) vs document RAG. Requires both a
+    quantifier-style word AND a claims/maintenance-domain word, so generic
+    "how many X" questions unrelated to those two tables (e.g. "how many
+    leaves do I have") fall through to hybrid RAG instead. Replace with an
     LLM-based router if you want smarter classification - this is
     intentionally non-AI so the endpoint works before Components 1-4 land.
     """
     lowered = question.lower()
-    return any(_contains_keyword(lowered, keyword) for keyword in ANALYTICAL_KEYWORDS)
+    has_quantifier = any(_contains_keyword(lowered, keyword) for keyword in ANALYTICAL_KEYWORDS)
+    has_domain_word = any(_contains_keyword(lowered, keyword) for keyword in DOMAIN_KEYWORDS)
+    return has_quantifier and has_domain_word

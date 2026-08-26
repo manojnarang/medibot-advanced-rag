@@ -67,6 +67,20 @@ def test_nurse_in_scope_question_is_not_blocked(client):
     assert response.json()["retrieval_type"] == "hybrid_rag"
 
 
+def test_generic_quantifier_question_unrelated_to_sql_tables_is_not_misrouted(client):
+    """'How many leaves do I have' must not be treated as an analytical (SQL
+    RAG) question just because it contains 'how many' - it's a leave-policy
+    question that belongs in hybrid RAG over the general collection."""
+    token = _login(client, "nurse.priya", "Nurse@123")
+    response = client.post(
+        "/chat",
+        json={"question": "How many leaves do I have?"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["retrieval_type"] == "hybrid_rag"
+
+
 def test_own_role_can_view_own_collections(client):
     token = _login(client, "nurse.priya", "Nurse@123")
     response = client.get("/collections/nurse", headers={"Authorization": f"Bearer {token}"})
