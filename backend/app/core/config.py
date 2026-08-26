@@ -6,7 +6,10 @@ unmodified on Windows or Linux and never hardcodes machine-specific paths.
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+INSECURE_DEFAULT_SECRET_KEY = "insecure-dev-secret-change-me"
 
 
 class Settings(BaseSettings):
@@ -16,7 +19,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     cors_origins: str = "http://localhost:3000"
 
-    secret_key: str = "insecure-dev-secret-change-me"
+    secret_key: str = INSECURE_DEFAULT_SECRET_KEY
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 120
 
@@ -33,6 +36,15 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def _reject_insecure_secret_outside_dev(self) -> "Settings":
+        if self.environment != "development" and self.secret_key == INSECURE_DEFAULT_SECRET_KEY:
+            raise ValueError(
+                "SECRET_KEY is still the insecure default. Set a real SECRET_KEY "
+                "before running with ENVIRONMENT != development."
+            )
+        return self
 
 
 @lru_cache

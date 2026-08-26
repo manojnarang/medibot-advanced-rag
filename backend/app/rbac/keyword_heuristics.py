@@ -31,6 +31,12 @@ COLLECTION_KEYWORDS: dict[str, list[str]] = {
 }
 
 
+def _contains_keyword(lowered_text: str, keyword: str) -> bool:
+    """Word-boundary match so short keywords (e.g. "count", "sum") don't
+    false-positive inside unrelated words ("discount", "summary")."""
+    return re.search(rf"\b{re.escape(keyword)}\b", lowered_text) is not None
+
+
 def find_restricted_collection_mention(question: str, allowed_collections: list[str]) -> str | None:
     """Return the name of a restricted collection the question appears to be
     asking about, or None if no obvious restricted-topic keyword is found."""
@@ -38,9 +44,8 @@ def find_restricted_collection_mention(question: str, allowed_collections: list[
     for collection, keywords in COLLECTION_KEYWORDS.items():
         if collection in allowed_collections:
             continue
-        for keyword in keywords:
-            if re.search(rf"\b{re.escape(keyword)}\b", lowered):
-                return collection
+        if any(_contains_keyword(lowered, keyword) for keyword in keywords):
+            return collection
     return None
 
 
@@ -59,4 +64,4 @@ def looks_analytical(question: str) -> bool:
     intentionally non-AI so the endpoint works before Components 1-4 land.
     """
     lowered = question.lower()
-    return any(keyword in lowered for keyword in ANALYTICAL_KEYWORDS)
+    return any(_contains_keyword(lowered, keyword) for keyword in ANALYTICAL_KEYWORDS)

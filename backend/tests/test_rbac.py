@@ -53,3 +53,23 @@ def test_technician_cannot_use_sql_rag(client):
     )
     assert response.status_code == 200
     assert response.json()["retrieval_type"] == "rbac_blocked"
+
+
+def test_nurse_in_scope_question_is_not_blocked(client):
+    """Same RBAC mechanism must not over-block questions the role IS allowed to ask."""
+    token = _login(client, "nurse.priya", "Nurse@123")
+    response = client.post(
+        "/chat",
+        json={"question": "What is the infection control procedure for catheters?"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["retrieval_type"] == "hybrid_rag"
+
+
+def test_own_role_can_view_own_collections(client):
+    token = _login(client, "nurse.priya", "Nurse@123")
+    response = client.get("/collections/nurse", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    names = [c["name"] for c in response.json()["accessible_collections"]]
+    assert names == ["general", "nursing"]
