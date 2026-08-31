@@ -6,7 +6,8 @@ retrieval and a Next.js chat frontend. This repository contains the **full appli
 retrieval, reranking, SQL RAG) which are implemented separately in Python — see
 [What's stubbed vs. implemented](#whats-stubbed-vs-implemented).
 
-The original assignment brief this was built from is kept at [`docs/assignment.md`](docs/assignment.md).
+Built for the Codebasics AI Engineering Bootcamp's MediBot assignment (Advanced RAG, Hybrid
+Search, Reranking & Role-Based Access).
 
 ## Architecture
 
