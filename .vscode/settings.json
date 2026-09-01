@@ -3,6 +3,7 @@
   "python.testing.pytestEnabled": true,
   "python.testing.pytestArgs": ["backend/tests"],
   "python.analysis.extraPaths": ["${workspaceFolder}/backend"],
+  "ruff.importStrategy": "fromEnvironment",
   "files.exclude": {
     "**/__pycache__": true,
     "**/.pytest_cache": true
