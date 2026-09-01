@@ -14,7 +14,10 @@ from app.chat.schemas import ChatResponse
 from app.rag.orchestrator import hybrid_rag_answer
 from app.rag.sql_rag import sql_rag_chain
 from app.rbac.access_matrix import can_use_sql_rag, get_accessible_collections
-from app.rbac.keyword_heuristics import find_restricted_collection_mention, looks_analytical
+from app.rbac.keyword_heuristics import (
+    find_restricted_collection_mention,
+    looks_analytical,
+)
 
 logger = logging.getLogger(__name__)
 

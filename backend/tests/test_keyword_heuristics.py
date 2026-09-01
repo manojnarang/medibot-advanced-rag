@@ -1,4 +1,7 @@
-from app.rbac.keyword_heuristics import find_restricted_collection_mention, looks_analytical
+from app.rbac.keyword_heuristics import (
+    find_restricted_collection_mention,
+    looks_analytical,
+)
 
 
 def test_looks_analytical_matches_real_keywords():

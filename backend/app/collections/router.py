@@ -4,7 +4,11 @@ from pydantic import BaseModel
 from app.auth.dependencies import get_current_user
 from app.auth.schemas import CurrentUser
 from app.core.config import get_settings
-from app.rbac.access_matrix import COLLECTIONS, get_accessible_collections, is_valid_role
+from app.rbac.access_matrix import (
+    COLLECTIONS,
+    get_accessible_collections,
+    is_valid_role,
+)
 
 router = APIRouter(tags=["collections"])
 settings = get_settings()
