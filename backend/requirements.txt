@@ -1,8 +1,8 @@
 # --- Core API ---
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
-pydantic==2.9.2
-pydantic-settings==2.5.2
+pydantic==2.13.5
+pydantic-settings==2.15.0
 
 # --- Auth ---
 pyjwt==2.9.0
@@ -10,15 +10,26 @@ bcrypt==4.2.0
 
 # --- Testing ---
 pytest==8.3.3
-httpx==0.27.2
+httpx==0.28.1
 
 # --- Dev tooling (not needed to run the app, only to lint it) ---
 ruff==0.16.5
 
 # --- AI / RAG stack (used once you plug in Components 1-4) ---
 # Uncomment / adjust as you implement ingestion, hybrid search, reranking and SQL RAG.
-# docling
-# qdrant-client
+
+# CPU-only torch build: this app never touches a GPU, and the default PyPI torch
+# wheel pulls the full CUDA toolkit (adds several GB and ~10x the install time).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0+cpu
+torchvision==0.29.0+cpu
+
+docling==2.126.0
+docling-hierarchical-pdf==0.1.8
+sentence-transformers==6.0.1
+qdrant-client==1.19.0
+groq==1.7.0
+
 # rank-bm25
-# sentence-transformers
+
 # anthropic
