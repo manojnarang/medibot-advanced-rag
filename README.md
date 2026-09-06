@@ -132,6 +132,9 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 source .venv/bin/activate     # Linux/macOS
 
+# CPU-only torch (this app never uses a GPU) - install before requirements.txt so the
+# lighter build is already in place when docling/sentence-transformers pull torch in.
+pip install torch==2.14.0+cpu torchvision==0.29.0+cpu --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 cp .env.example .env          # Windows: copy .env.example .env
 ```

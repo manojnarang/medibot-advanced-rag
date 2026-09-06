@@ -18,11 +18,12 @@ ruff==0.16.5
 # --- AI / RAG stack (used once you plug in Components 1-4) ---
 # Uncomment / adjust as you implement ingestion, hybrid search, reranking and SQL RAG.
 
-# CPU-only torch build: this app never touches a GPU, and the default PyPI torch
-# wheel pulls the full CUDA toolkit (adds several GB and ~10x the install time).
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.14.0+cpu
-torchvision==0.29.0+cpu
+# torch and torchvision are NOT listed here on purpose. They're installed as a separate,
+# earlier step (CPU-only build, from PyTorch's own package index) - see backend/Dockerfile
+# and the README's local setup instructions. Installing this file alone, without that
+# earlier step, would pull the full CUDA build in as a dependency of docling/
+# sentence-transformers below - several GB larger and much slower to install, for a GPU
+# this app never uses.
 
 docling==2.126.0
 docling-hierarchical-pdf==0.1.8
