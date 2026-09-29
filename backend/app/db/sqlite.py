@@ -31,9 +31,21 @@ def is_database_reachable() -> bool:
         return False
 
 
+_MAX_DISTINCT_VALUES_TO_SHOW = 15
+
+
 def get_schema_summary() -> str:
-    """Human-readable schema dump (table + columns) - useful context when
-    building the NL -> SQL prompt for Component 4's sql_rag_chain."""
+    """Human-readable schema dump (table + columns), including the actual
+    distinct values for low-cardinality TEXT columns (status, department,
+    claim_type, etc.) - useful context when building the NL -> SQL prompt
+    for Component 4's sql_rag_chain. Without this, the model has to guess
+    enum-like values from column names alone, and gets it wrong: e.g. it
+    invented a claim_type of 'billing' (misreading "billing claims" in a
+    question as a filter value) when the real values are only
+    'cashless'/'reimbursement' - a filter on a nonexistent value silently
+    returns zero rows instead of erroring. High-cardinality columns (names,
+    IDs, free text) are left alone since listing every value would be noise.
+    """
     lines: list[str] = []
     with get_connection() as conn:
         tables = conn.execute(
@@ -44,5 +56,15 @@ def get_schema_summary() -> str:
             lines.append(f"Table: {table_name}")
             columns = conn.execute(f"PRAGMA table_info('{table_name}')").fetchall()
             for col in columns:
-                lines.append(f"  - {col['name']} ({col['type']})")
+                col_name, col_type = col["name"], col["type"]
+                line = f"  - {col_name} ({col_type})"
+                if col_type.upper() == "TEXT":
+                    distinct = conn.execute(
+                        f"SELECT DISTINCT {col_name} FROM {table_name} "
+                        f"WHERE {col_name} IS NOT NULL LIMIT {_MAX_DISTINCT_VALUES_TO_SHOW + 1}"
+                    ).fetchall()
+                    values = [row[0] for row in distinct]
+                    if 0 < len(values) <= _MAX_DISTINCT_VALUES_TO_SHOW:
+                        line += f" - values: {values}"
+                lines.append(line)
     return "\n".join(lines)

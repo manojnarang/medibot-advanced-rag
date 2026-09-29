@@ -1,9 +1,9 @@
 """Single source of truth for role -> document-collection access.
 
 This mapping is what gets turned into a metadata filter (`access_roles`) at
-the vector-store query layer once Components 1-3 are implemented, so that
-restricted chunks are never returned to the application in the first place -
-RBAC is enforced at retrieval, not by filtering results after the fact.
+the vector-store query layer (see app.rag.retriever), so that restricted
+chunks are never returned to the application in the first place - RBAC is
+enforced at retrieval, not by filtering results after the fact.
 """
 from dataclasses import dataclass
 

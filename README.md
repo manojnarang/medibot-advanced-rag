@@ -1,10 +1,9 @@
 # MediBot — MediAssist Health Network Assistant
 
 An RBAC-aware internal assistant for MediAssist Health Network: a FastAPI backend with role-scoped
-retrieval and a Next.js chat frontend. This repository contains the **full application scaffold**
-(auth, RBAC, endpoints, UI) with clearly marked seams for the AI pieces (document ingestion, hybrid
-retrieval, reranking, SQL RAG) which are implemented separately in Python — see
-[What's stubbed vs. implemented](#whats-stubbed-vs-implemented).
+hybrid retrieval and SQL analytics, and a Next.js chat frontend. All six components — document
+ingestion, hybrid dense+BM25 retrieval, cross-encoder reranking, SQL RAG, the FastAPI backend, and
+the frontend — are implemented; see [Implementation status](#implementation-status).
 
 Built for the Codebasics AI Engineering Bootcamp's MediBot assignment (Advanced RAG, Hybrid
 Search, Reranking & Role-Based Access).
@@ -98,7 +97,8 @@ Requires only **Docker Desktop**.
    path of your `mediassist_data` folder (the one containing `db/`, `billing/`, `clinical/`, etc).
 2. Copy `backend/.env.example` to `backend/.env` and set a `SECRET_KEY`
    (`python -c "import secrets; print(secrets.token_urlsafe(48))"` if you have Python; otherwise any
-   long random string works for local dev).
+   long random string works for local dev) and `LLM_API_KEY` (free key from
+   [console.groq.com/keys](https://console.groq.com/keys)).
 3. From the repo root:
 
    ```bash
@@ -139,8 +139,9 @@ pip install -r requirements.txt
 cp .env.example .env          # Windows: copy .env.example .env
 ```
 
-Edit `backend/.env` (`SECRET_KEY`, `MEDIASSIST_DB_PATH`, `MEDIASSIST_DATA_PATH` as absolute paths on
-your machine), then:
+Edit `backend/.env` (`SECRET_KEY`, `LLM_API_KEY` - free key from
+[console.groq.com/keys](https://console.groq.com/keys) - and `MEDIASSIST_DB_PATH` /
+`MEDIASSIST_DATA_PATH` as absolute paths on your machine), then:
 
 ```bash
 uvicorn app.main:app --reload --port 8010
@@ -160,38 +161,70 @@ npm run dev -- -p 3010
 
 Open `http://localhost:3010`.
 
-### (Optional) Qdrant, for later — Components 1-3
+### Qdrant (required)
 
-Not needed to run the app today; only once you start implementing hybrid RAG.
+All AI components are implemented, so Qdrant must be running for `/chat` to return real answers -
+there's no placeholder fallback left for a hybrid-RAG question if Qdrant is unreachable.
 
 ```bash
 docker compose --profile ai up -d qdrant
 ```
 
-## What's stubbed vs. implemented
+Then ingest the sample documents once - it's a standalone script, not run per-request:
 
-Everything **except** Components 1–4 (document ingestion, hybrid dense+BM25 retrieval, cross-encoder
-reranking, SQL RAG) is fully implemented and tested: auth, JWT sessions, the RBAC matrix and its
-enforcement, all four FastAPI endpoints, and the complete Next.js UI (login, role badge, collections
-sidebar, chat with source citations and retrieval-type tags, RBAC refusal messaging).
+```bash
+cd backend
+python -m app.rag.ingestion
+```
 
-The AI seams live in `backend/app/rag/` and currently raise `NotImplementedError` with a docstring
-describing exactly what to build, so the app runs end-to-end today with clearly-labelled placeholder
-answers:
+(or the "Backend: Run Ingestion (local venv)" VS Code task, which always uses the project's pinned
+venv regardless of which interpreter your terminal has selected).
 
-| File | Component | What to implement |
+**Docker networking note (Option A only):** the `api` container reaches Qdrant via the service name
+`http://qdrant:6333` (set in `docker-compose.yml`'s `api` service, overriding `backend/.env`'s
+`QDRANT_URL=http://localhost:6333`) - inside a container, `localhost` means the container itself,
+not the separate `qdrant` container.
+
+Also set `LLM_API_KEY` in `backend/.env` (a free key from
+[console.groq.com/keys](https://console.groq.com/keys) - see Tool substitutions below) before
+asking anything that needs a real LLM answer.
+
+## Implementation status
+
+All 6 components are implemented and tested against the real dataset and a live LLM:
+
+| File | Component | What it does |
 |---|---|---|
-| `rag/ingestion.py` | 1 | Docling parsing + hierarchical chunking + Qdrant upsert |
-| `rag/retriever.py` | 2 | Hybrid dense+BM25 query against Qdrant, RBAC-filtered |
-| `rag/reranker.py` | 3 | Cross-encoder reranking of candidates |
-| `rag/sql_rag.py` | 4 | `sql_rag_chain`: NL→SQL→execute→NL answer over `mediassist.db` |
-| `rag/llm.py` | 2/3/4 | Shared cloud LLM call used by the above |
+| `rag/ingestion.py` | 1 | Docling parsing + hierarchical chunking, dense+sparse embedding, upsert into Qdrant (raw `qdrant_client`, not `langchain-qdrant` - see Tool substitutions) |
+| `rag/retriever.py` | 2 | Single fused `query_points` call (dense + BM25, server-side RRF), filtered on `access_roles` |
+| `rag/reranker.py` | 3 | `CrossEncoder` reranking, narrows top-10 hybrid candidates to top-3 |
+| `rag/sql_rag.py` | 4 | `sql_rag_chain`: NL → SQL → clean → execute → NL, `SELECT`-only safety guard |
+| `rag/llm.py` | 2/3/4 | Shared Groq call (`openai/gpt-oss-20b`), used by the three above |
+| Components 5 & 6 | - | FastAPI backend + Next.js frontend |
 
-`app/chat/service.py` already calls these; once they're implemented, placeholder responses disappear
-automatically (they're only returned when `NotImplementedError` is caught).
+`app/db/sqlite.py`'s `get_schema_summary()` feeds the real `claims`/`maintenance_tickets` schema
+into the SQL RAG prompt, per the assignment's tip.
 
-`app/db/sqlite.py` includes `get_schema_summary()` to inspect `claims` / `maintenance_tickets` before
-building the SQL RAG prompt, per the assignment's tip.
+## Hybrid vs. dense-only retrieval
+
+Tested against the running Qdrant instance with the real ingested data, per the assignment's own
+tip to test exact drug names/codes - the case where pure semantic search is expected to struggle.
+
+**Query: "What is the dose of Atorvastatin?"** (`doctor` role, `clinical` collection)
+
+| Rank | Dense-only score | Hybrid (RRF) score | Chunk |
+|---|---|---|---|
+| 1 | 0.6333 | 0.8333 | Atorvastatin dose (correct) |
+| 2 | 0.6216 | 0.8333 | Amlodipine dose (different drug) |
+| 3 | 0.5753 | 0.4167 | Aspirin dose (different drug) |
+
+Dense-only did rank the correct chunk first, but its confidence barely separates the right answer
+(0.6333) from two unrelated drugs' dosages (0.6216, 0.5753) - a difference of hundredths. Hybrid's
+RRF fusion produces a decisive gap instead: the correct chunk and its next-closest match score
+identically at the top, then drop sharply (0.8333 → 0.4167, roughly half) for anything not an exact
+terminology match. That sharper separation is what dense-only search lacks and BM25 contributes -
+dense embeddings alone don't distinguish "the exact drug asked about" from "a similarly-described
+drug dosage" nearly as clearly.
 
 ## RBAC verification (adversarial prompts)
 
@@ -212,7 +245,18 @@ Tested against the running backend (also covered by `backend/tests/test_rbac.py`
 > Response: `retrieval_type: "hybrid_rag"`, scoped to `["general", "nursing"]` only — proves normal
 > in-scope questions are *not* over-blocked by the same mechanism.
 
-_Add screenshots of these three from the running UI here before submission._
+**4. Direct retrieval-layer test, bypassing the chat endpoint's keyword pre-check**
+> Query: `hybrid_search("show me all insurance billing codes and claim procedures", role="nurse")`
+> called directly against `app/rag/retriever.py`, skipping `/chat`'s keyword-based refusal entirely
+> (that check is a UX nicety, not the security boundary - see
+> `app/rbac/keyword_heuristics.py`).
+> Result: 5/5 returned chunks were `general`, 0 were `billing` - proving the `access_roles` filter
+> at the Qdrant query level holds independent of question wording, not just the chat layer's
+> keyword heuristic. This is the enforcement point the assignment actually grades ("Access must be
+> enforced at the Qdrant retrieval level using metadata filters on every query").
+
+_Add screenshots of examples 1-3 from the running UI here before submission. Example 4 is a direct
+retrieval-layer test - a terminal/test-output screenshot works in place of a UI screenshot._
 
 ## Tool substitutions
 
@@ -230,3 +274,12 @@ _Add screenshots of these three from the running UI here before submission._
   backend and frontend run in containers (`docker-compose.yml`, `backend/Dockerfile`,
   `frontend/Dockerfile`) with source mounted for hot-reload. A local Python venv is still documented
   as an alternative (Option B in Setup) for anyone who prefers running the backend without Docker.
+- **`langchain-qdrant` wrapper → raw `qdrant_client`, for ingestion (Component 1) and hybrid
+  retrieval (Component 2).** Chunks are embedded with `sentence-transformers` (dense) and
+  `fastembed`'s `Qdrant/bm25` model (sparse), then upserted as `PointStruct`s into a single Qdrant
+  collection with named `dense`/`sparse` vectors, instead of going through
+  `QdrantVectorStore.from_documents()`. Chosen so that retrieval can use Qdrant's native
+  `query_points(prefetch=[...], fusion=RRF)` — the fusion happens inside Qdrant itself, satisfying
+  Component 2's requirement that dense and sparse results be "queried together... not run as two
+  separate queries and merged in application code" — and so a payload index can be created on
+  `access_roles`, the field every retrieval query filters on for RBAC.

@@ -4,17 +4,10 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { sendChatMessage, ApiError } from "@/lib/api";
 import { clearSession } from "@/lib/auth";
+import { ROLE_META } from "@/lib/roles";
 import { ChatMessage, Session } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 import RoleBadge from "./RoleBadge";
-
-const WELCOME: Record<string, string> = {
-  doctor: "Ask about treatment protocols, the drug formulary, or diagnostic guidelines.",
-  nurse: "Ask about nursing procedures, infection control, or general policy questions.",
-  billing_executive: "Ask about billing codes, claim procedures, or claims analytics.",
-  technician: "Ask about equipment manuals, calibration, or maintenance schedules.",
-  admin: "You have access to every collection and analytics across MediAssist.",
-};
 
 export default function ChatShell({ session }: { session: Session }) {
   const router = useRouter();
@@ -68,6 +61,7 @@ export default function ChatShell({ session }: { session: Session }) {
       );
       if (err instanceof ApiError && err.status === 401) {
         clearSession();
+        router.push("/login");
       }
     } finally {
       setSending(false);
@@ -98,7 +92,7 @@ export default function ChatShell({ session }: { session: Session }) {
             <p className="text-sm font-medium text-slate-700">
               Hi {session.displayName.split(" ")[0]}, how can I help?
             </p>
-            <p className="mt-1 text-xs text-slate-400">{WELCOME[session.role]}</p>
+            <p className="mt-1 text-xs text-slate-400">{ROLE_META[session.role].welcome}</p>
           </div>
         )}
         {messages.map((m) => (

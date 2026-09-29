@@ -4,6 +4,7 @@ import SourceList from "./SourceList";
 
 export default function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
+  const isBlocked = !isUser && message.retrievalType === "rbac_blocked";
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -11,7 +12,9 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
         className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
           isUser
             ? "rounded-br-sm bg-brand-600 text-white"
-            : "rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200"
+            : isBlocked
+              ? "rounded-bl-sm border-l-4 border-red-300 bg-red-50 text-red-900 ring-1 ring-red-100"
+              : "rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200"
         }`}
       >
         {message.pending ? (

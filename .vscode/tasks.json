@@ -27,6 +27,13 @@
       "command": "${workspaceFolder}/backend/.venv/Scripts/python.exe -m pytest -q",
       "options": { "cwd": "${workspaceFolder}/backend" },
       "problemMatcher": []
+    },
+    {
+      "label": "Backend: Run Ingestion (local venv)",
+      "type": "shell",
+      "command": "${workspaceFolder}/backend/.venv/Scripts/python.exe -m app.rag.ingestion",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
     }
   ]
 }

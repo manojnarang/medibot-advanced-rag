@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+
 def _login(client, username, password):
     response = client.post("/login", json={"username": username, "password": password})
     assert response.status_code == 200
@@ -33,7 +36,11 @@ def test_adversarial_prompt_is_blocked_for_nurse(client):
     assert "billing" in body["answer"].lower()
 
 
-def test_billing_executive_sql_rag_allowed_role_check(client):
+@patch("app.chat.service.sql_rag_chain")
+def test_billing_executive_sql_rag_allowed_role_check(mock_sql_rag_chain, client):
+    """Component: routing/RBAC only - the SQL RAG chain itself (real DB +
+    LLM call) is covered separately, not by this fast routing test."""
+    mock_sql_rag_chain.return_value = "There were 3 escalated claims last month."
     token = _login(client, "billing.ravi", "Billing@123")
     response = client.post(
         "/chat",
@@ -42,6 +49,7 @@ def test_billing_executive_sql_rag_allowed_role_check(client):
     )
     assert response.status_code == 200
     assert response.json()["retrieval_type"] == "sql_rag"
+    mock_sql_rag_chain.assert_called_once()
 
 
 def test_technician_cannot_use_sql_rag(client):
@@ -55,8 +63,12 @@ def test_technician_cannot_use_sql_rag(client):
     assert response.json()["retrieval_type"] == "rbac_blocked"
 
 
-def test_nurse_in_scope_question_is_not_blocked(client):
-    """Same RBAC mechanism must not over-block questions the role IS allowed to ask."""
+@patch("app.chat.service.hybrid_rag_answer")
+def test_nurse_in_scope_question_is_not_blocked(mock_hybrid_rag_answer, client):
+    """Same RBAC mechanism must not over-block questions the role IS allowed to ask.
+    Component: routing/RBAC only - real retrieval is covered separately, not by
+    this fast routing test (which would otherwise require a live Qdrant)."""
+    mock_hybrid_rag_answer.return_value = {"answer": "Mocked answer.", "sources": []}
     token = _login(client, "nurse.priya", "Nurse@123")
     response = client.post(
         "/chat",
@@ -65,12 +77,18 @@ def test_nurse_in_scope_question_is_not_blocked(client):
     )
     assert response.status_code == 200
     assert response.json()["retrieval_type"] == "hybrid_rag"
+    mock_hybrid_rag_answer.assert_called_once()
 
 
-def test_generic_quantifier_question_unrelated_to_sql_tables_is_not_misrouted(client):
+@patch("app.chat.service.hybrid_rag_answer")
+def test_generic_quantifier_question_unrelated_to_sql_tables_is_not_misrouted(
+    mock_hybrid_rag_answer, client
+):
     """'How many leaves do I have' must not be treated as an analytical (SQL
     RAG) question just because it contains 'how many' - it's a leave-policy
-    question that belongs in hybrid RAG over the general collection."""
+    question that belongs in hybrid RAG over the general collection.
+    Component: routing/RBAC only - see test_nurse_in_scope_question_is_not_blocked."""
+    mock_hybrid_rag_answer.return_value = {"answer": "Mocked answer.", "sources": []}
     token = _login(client, "nurse.priya", "Nurse@123")
     response = client.post(
         "/chat",
@@ -79,6 +97,7 @@ def test_generic_quantifier_question_unrelated_to_sql_tables_is_not_misrouted(cl
     )
     assert response.status_code == 200
     assert response.json()["retrieval_type"] == "hybrid_rag"
+    mock_hybrid_rag_answer.assert_called_once()
 
 
 def test_own_role_can_view_own_collections(client):

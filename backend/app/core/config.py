@@ -29,9 +29,9 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
 
-    llm_provider: str = "anthropic"
+    llm_provider: str = "groq"
     llm_api_key: str | None = None
-    llm_model: str = "claude-sonnet-5"
+    llm_model: str = "openai/gpt-oss-20b"
 
     @property
     def cors_origins_list(self) -> list[str]:

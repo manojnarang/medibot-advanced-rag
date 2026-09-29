@@ -8,6 +8,7 @@ import RoleBadge from "./RoleBadge";
 export default function Sidebar({ session }: { session: Session }) {
   const [collections, setCollections] = useState<CollectionInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -16,7 +17,7 @@ export default function Sidebar({ session }: { session: Session }) {
         if (!cancelled) setCollections(res.accessible_collections);
       })
       .catch(() => {
-        if (!cancelled) setCollections([]);
+        if (!cancelled) setLoadError(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -44,7 +45,10 @@ export default function Sidebar({ session }: { session: Session }) {
           Your accessible collections
         </h3>
         {loading && <p className="text-xs text-slate-400">Loading…</p>}
-        {!loading && collections.length === 0 && (
+        {!loading && loadError && (
+          <p className="text-xs text-red-500">Couldn&apos;t load your collections. Try refreshing.</p>
+        )}
+        {!loading && !loadError && collections.length === 0 && (
           <p className="text-xs text-slate-400">No collections available.</p>
         )}
         <ul className="space-y-3">

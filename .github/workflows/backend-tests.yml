@@ -20,6 +20,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      # CPU-only torch: this app never touches a GPU, and the default PyPI wheel pulls in the
+      # full CUDA toolkit. Installed as its own step, from PyTorch's index exclusively, so it
+      # never affects where any other package in requirements.txt resolves from (same pattern
+      # as backend/Dockerfile and the README's local-setup instructions - keep all three in
+      # sync if this version ever changes).
+      - run: pip install torch==2.14.0+cpu torchvision==0.29.0+cpu --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -r requirements.txt
       - run: ruff check .
       - run: pytest -q

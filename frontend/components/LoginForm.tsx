@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { login, ApiError } from "@/lib/api";
 import { saveSession } from "@/lib/auth";
-import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
+import { DEMO_ACCOUNTS, ROLE_META } from "@/lib/roles";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -100,8 +100,8 @@ export default function LoginForm() {
               }}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs transition hover:border-brand-300 hover:bg-brand-50"
             >
-              <div className="font-semibold text-slate-700">{account.label}</div>
-              <div className="text-slate-400">{account.role}</div>
+              <div className="font-semibold text-slate-700">{account.displayName}</div>
+              <div className="text-slate-400">{ROLE_META[account.role].label}</div>
             </button>
           ))}
         </div>

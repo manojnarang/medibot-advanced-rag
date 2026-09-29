@@ -29,8 +29,5 @@ docling==2.126.0
 docling-hierarchical-pdf==0.1.8
 sentence-transformers==6.0.1
 qdrant-client==1.19.0
+fastembed==0.8.1
 groq==1.7.0
-
-# rank-bm25
-
-# anthropic
