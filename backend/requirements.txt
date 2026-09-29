@@ -15,8 +15,7 @@ httpx==0.28.1
 # --- Dev tooling (not needed to run the app, only to lint it) ---
 ruff==0.16.5
 
-# --- AI / RAG stack (used once you plug in Components 1-4) ---
-# Uncomment / adjust as you implement ingestion, hybrid search, reranking and SQL RAG.
+# --- AI / RAG stack (Components 1-4: ingestion, hybrid search, reranking, SQL RAG) ---
 
 # torch and torchvision are NOT listed here on purpose. They're installed as a separate,
 # earlier step (CPU-only build, from PyTorch's own package index) - see backend/Dockerfile

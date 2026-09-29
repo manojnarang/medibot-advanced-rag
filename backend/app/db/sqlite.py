@@ -37,14 +37,11 @@ _MAX_DISTINCT_VALUES_TO_SHOW = 15
 def get_schema_summary() -> str:
     """Human-readable schema dump (table + columns), including the actual
     distinct values for low-cardinality TEXT columns (status, department,
-    claim_type, etc.) - useful context when building the NL -> SQL prompt
-    for Component 4's sql_rag_chain. Without this, the model has to guess
-    enum-like values from column names alone, and gets it wrong: e.g. it
-    invented a claim_type of 'billing' (misreading "billing claims" in a
-    question as a filter value) when the real values are only
-    'cashless'/'reimbursement' - a filter on a nonexistent value silently
-    returns zero rows instead of erroring. High-cardinality columns (names,
-    IDs, free text) are left alone since listing every value would be noise.
+    claim_type, etc.) - context for Component 4's NL -> SQL prompt, so the
+    model filters on real values instead of guessing plausible-sounding ones
+    that don't exist and silently return zero rows. High-cardinality columns
+    (names, IDs, free text) are left alone since listing every value would
+    be noise.
     """
     lines: list[str] = []
     with get_connection() as conn:

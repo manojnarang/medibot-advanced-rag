@@ -49,7 +49,6 @@ settings = get_settings()
 
 data_path = settings.mediassist_data_path
 
-# loading
 def load_document(source: str) -> DoclingDocument :
     """
     Convert pdf/md file to a DoclingDocument using Docling
@@ -152,7 +151,6 @@ def prepare_chunk_metadata(file_path: Path, collection: str, doc_chunk) -> dict:
 
 
 
-# ingesting
 def run_ingestion() -> None:
    print("--------run_ingestion()----------")
 
