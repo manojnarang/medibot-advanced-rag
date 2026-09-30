@@ -217,24 +217,24 @@ have to guess valid filter values.
 
 ## Hybrid vs. dense-only retrieval
 
-Comparison on an exact drug-name query - the case where pure semantic search is expected to
-struggle most.
+Comparison on an exact equipment model number query - the case where pure semantic search is
+expected to struggle most.
 
-**Query: "What is the dose of Atorvastatin?"** (`doctor` role, `clinical` collection)
+**Query: "How do I calibrate the RadiPro MX-150?"** (`technician` role, `equipment` collection)
 
-| Rank | Dense-only score | Hybrid (RRF) score | Chunk |
+| Rank | Dense-only score | Hybrid (RRF) score | Section |
 |---|---|---|---|
-| 1 | 0.6333 | 0.8333 | Atorvastatin dose (correct) |
-| 2 | 0.6216 | 0.8333 | Amlodipine dose (different drug) |
-| 3 | 0.5753 | 0.4167 | Aspirin dose (different drug) |
+| 1 | 0.4440 | 0.7500 | Portable X-Ray Unit - RadiPro MX-150 (correct) |
+| 2 | 0.4422 | 0.6667 | Preventive Maintenance Calendar (different equipment) |
+| 3 | 0.4274 | 0.5833 | Battery & preventive maintenance (generic) |
 
-Dense-only did rank the correct chunk first, but its confidence barely separates the right answer
-(0.6333) from two unrelated drugs' dosages (0.6216, 0.5753) - a difference of hundredths. Hybrid's
-RRF fusion produces a decisive gap instead: the correct chunk and its next-closest match score
-identically at the top, then drop sharply (0.8333 → 0.4167, roughly half) for anything not an exact
-terminology match. That sharper separation is what dense-only search lacks and BM25 contributes -
-dense embeddings alone don't distinguish "the exact drug asked about" from "a similarly-described
-drug dosage" nearly as clearly.
+Dense-only does rank the correct section first, but its three scores are nearly indistinguishable
+(0.4440, 0.4422, 0.4274 - all within 0.02 of each other): a model number like "RadiPro MX-150"
+carries little distinct semantic meaning beyond "equipment," so dense embeddings struggle to tell it
+apart from other equipment sections. Hybrid's RRF fusion produces a decisive gap instead - 0.7500 for
+the correct section, dropping to 0.6667 and 0.5833 for sections about different equipment. The exact
+model-number match from BM25 pulls the right answer clearly ahead, precisely where dense-only nearly
+failed to distinguish it.
 
 ## RBAC verification (adversarial prompts)
 
