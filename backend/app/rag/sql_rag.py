@@ -57,7 +57,13 @@ _ANSWER_SYSTEM_PROMPT = (
     "appear in the query results below - never compute, estimate, or add any figure (a count, an "
     "average, a duration, a category not present in the results) that the SQL query didn't already "
     "return. If the results don't fully answer the question, say what's missing rather than filling "
-    "the gap with an invented number."
+    "the gap with an invented number.\n\n"
+    "If the question was broad or open-ended (asking for a general summary rather than one specific "
+    "fact) and the query grouped the data by a particular dimension (e.g. status, department, claim "
+    "type), end your answer with one short sentence naming the dimension it was grouped by and "
+    "inviting a more specific follow-up - for example: \"This groups claims by department and status; "
+    "ask for a breakdown by claim type or a specific department instead if you want a different view.\" "
+    "Skip this sentence entirely for a narrow question that already has one clear answer."
 )
 
 _MAX_ROWS_IN_PROMPT = 20
@@ -84,7 +90,7 @@ def sql_rag_chain(question: str) -> str:
     # Step 1: NL -> SQL
     system_prompt = _SQL_SYSTEM_PROMPT_TEMPLATE.format(schema=get_schema_summary())
     try:
-        raw_sql = generate(system_prompt=system_prompt, user_prompt=question)
+        raw_sql = generate(system_prompt=system_prompt, user_prompt=question, temperature=0.0)
     except Exception:
         logger.exception("SQL generation failed (LLM provider unavailable)")
         raise _llm_unavailable()
@@ -116,6 +122,7 @@ def sql_rag_chain(question: str) -> str:
         return generate(
             system_prompt=_ANSWER_SYSTEM_PROMPT,
             user_prompt=f"Question: {question}\n\n{result_summary}",
+            temperature=0.0,
         )
     except Exception:
         logger.exception("SQL answer generation failed (LLM provider unavailable)")

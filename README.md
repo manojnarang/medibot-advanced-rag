@@ -17,6 +17,7 @@ itself rather than as a prompt instruction. Paired with a Next.js chat frontend.
 - [Hybrid vs. dense-only retrieval](#hybrid-vs-dense-only-retrieval)
 - [SQL RAG — verified analytical questions](#sql-rag--verified-analytical-questions)
 - [RBAC verification (adversarial prompts)](#rbac-verification-adversarial-prompts)
+- [Reliability and safety](#reliability-and-safety)
 - [Tool substitutions](#tool-substitutions)
 
 ## Architecture
@@ -108,6 +109,7 @@ docker-compose.yml  # runs backend + frontend + Qdrant in containers
 backend/Dockerfile
 frontend/Dockerfile
 .vscode/            # VS Code interpreter path, recommended extensions, one-click tasks
+screenshots/        # adversarial-prompt evidence referenced in RBAC verification
 ```
 
 ## Setup
@@ -232,7 +234,8 @@ LLM answer - without it, `/chat` returns a 503 rather than a placeholder.
 | `rag/retriever.py` | Single fused `query_points` call (dense + BM25, server-side RRF), filtered on `access_roles` |
 | `rag/reranker.py` | `CrossEncoder` reranking, narrows top-10 hybrid candidates to top-3 |
 | `rag/sql_rag.py` | `sql_rag_chain`: NL → SQL → clean → execute → NL, `SELECT`-only safety guard |
-| `rag/llm.py` | Shared Groq call (`openai/gpt-oss-20b`), used by retrieval, reranking, and SQL RAG |
+| `rag/classifier.py` | `classify_question`: one LLM call decides whether a question needs SQL RAG or hybrid RAG, defaulting to hybrid RAG if the call fails |
+| `rag/llm.py` | Shared Groq call (`openai/gpt-oss-20b`), used by retrieval, reranking, SQL RAG, and classification |
 | `rag/orchestrator.py` | `hybrid_rag_answer`: calls retriever → reranker → llm in sequence, catches Qdrant/LLM outages and raises a 503 instead of a raw error |
 | `rag/vector_config.py` | Shared constants (embedding model names, Qdrant collection/vector names) used by both `ingestion.py` and `retriever.py`, so retrieval doesn't need to import ingestion's heavier Docling dependencies |
 
@@ -279,8 +282,8 @@ failed to distinguish it.
 
 ## SQL RAG — verified analytical questions
 
-Four analytical questions run against the real `claims`/`maintenance_tickets` database
-(`billing_executive` role), each cross-checked against the database directly.
+Four analytical questions sent through the live `/chat` endpoint as `billing_executive`, with each
+answer cross-checked against the `claims`/`maintenance_tickets` database directly.
 
 | Question | Answer |
 |---|---|
@@ -290,10 +293,20 @@ Four analytical questions run against the real `claims`/`maintenance_tickets` da
 | What is the total claimed amount for cardiology department claims? | ₹2,202,100 |
 
 All four return `retrieval_type: sql_rag` with an empty `sources` list (a database answer, not a
-document one). A broad, non-aggregating question (e.g. "Tell me about the claims") is steered
-toward `COUNT`/`AVG`/`GROUP BY` SQL rather than returning unaggregated rows, and the answer step
-only ever states numbers that are literally present in the query result - it never estimates from
-a partial row sample.
+document one). A broad, open-ended question (e.g. "Tell me about the claims") is steered toward
+`COUNT`/`AVG`/`GROUP BY` SQL rather than returning unaggregated rows, and the answer step only ever
+states numbers that are literally present in the query result - it never estimates from a partial
+row sample. When a broad question's results are grouped by a particular dimension (status,
+department, etc.), the answer names that dimension and invites a more specific follow-up, since an
+open-ended question can reasonably be summarized more than one way - for example: *"This groups
+claims by status; ask for a breakdown by department or claim type instead if you want a different
+view."*
+
+**Known limitation:** which dimension a broad question groups by isn't guaranteed to be identical
+between repeated requests, since that choice is made by the SQL-generation LLM call itself. The
+disclosure sentence above is the mitigation - every response says what it grouped by, rather than
+presenting one interpretation as the only one. The four questions in the table above are narrow
+enough (one clear SQL query each) that this doesn't apply to them.
 
 ## RBAC verification (adversarial prompts)
 
@@ -332,6 +345,23 @@ directly, below the level `test_rbac.py` exercises.
 > enforced at the Qdrant retrieval level using metadata filters on every query").
 
 ![Direct retrieval-layer test output](screenshots/adversarial-4-retrieval-layer.png)
+
+## Reliability and safety
+
+- **Safe fallback on failure, not silent misbehavior.** If the SQL-vs-document classifier call fails,
+  it defaults to hybrid RAG rather than guessing - a failed document search degrades to "not covered
+  by the available documents," while running SQL RAG on a misclassified question would not. Qdrant/LLM
+  outages follow the same pattern elsewhere (`orchestrator.py`, `sql_rag.py`): caught, logged, and
+  returned as a `503`, never an unhandled crash.
+- **SQL execution is guarded in code, not just prompted.** The LLM is instructed to write
+  `SELECT`-only SQL, and that instruction is also enforced before execution - a generated
+  `DELETE`/`DROP`/etc. is rejected regardless of what the prompt said.
+- **The SQL-generation prompt includes real column values, not just names and types** (see
+  `get_schema_summary()`), so the model doesn't have to guess a valid filter value.
+- **Open-ended SQL RAG answers disclose their own assumptions** - see [SQL RAG — verified analytical
+  questions](#sql-rag--verified-analytical-questions).
+- **RBAC is enforced at the retrieval layer itself**, not as a prompt instruction - see [RBAC
+  verification](#rbac-verification-adversarial-prompts) above.
 
 ## Tool substitutions
 

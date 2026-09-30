@@ -12,19 +12,17 @@ permissions is ever fetched, so a restricted document can't leak through
 the LLM.
 """
 from app.chat.schemas import ChatResponse
+from app.rag.classifier import classify_question
 from app.rag.orchestrator import hybrid_rag_answer
 from app.rag.sql_rag import sql_rag_chain
 from app.rbac.access_matrix import can_use_sql_rag, get_accessible_collections
-from app.rbac.keyword_heuristics import (
-    find_restricted_collection_mention,
-    looks_analytical,
-)
+from app.rbac.keyword_heuristics import find_restricted_collection_mention
 
 
 def handle_chat(question: str, role: str) -> ChatResponse:
     allowed_collections = get_accessible_collections(role)
 
-    if looks_analytical(question):
+    if classify_question(question) == "analytical":
         if not can_use_sql_rag(role):
             return ChatResponse(
                 answer=(
