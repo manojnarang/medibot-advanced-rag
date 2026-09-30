@@ -89,6 +89,15 @@ frontend/Dockerfile
 Everything is driven by environment variables — no paths are hardcoded, so this runs unmodified on
 Windows or Linux. There are two ways to run it; pick one.
 
+**About the sample dataset:** the documents and database this project was built and tested against
+are provided by the Codebasics bootcamp to enrolled students, and aren't included in this repo. The
+app itself (login, RBAC, all 4 endpoints, the frontend) runs and can be explored without them. To see
+ingestion, hybrid RAG, or SQL RAG produce real answers, point `MEDIASSIST_DATA_PATH` /
+`MEDIASSIST_DB_PATH` at your own data instead, organized the same way: a folder per collection named
+exactly `general`, `clinical`, `nursing`, `billing`, `equipment` (each with PDF/Markdown files), and a
+SQLite database at `MEDIASSIST_DB_PATH` with `claims` and `maintenance_tickets` tables (see
+`app/rbac/access_matrix.py` and `app/db/sqlite.py` for the exact schema expected).
+
 ### Option A — Docker (recommended, no Python/Node install needed)
 
 Requires only **Docker Desktop**.
