@@ -5,9 +5,6 @@ hybrid retrieval and SQL analytics, and a Next.js chat frontend. All six compone
 ingestion, hybrid dense+BM25 retrieval, cross-encoder reranking, SQL RAG, the FastAPI backend, and
 the frontend — are implemented; see [Implementation status](#implementation-status).
 
-Built for the Codebasics AI Engineering Bootcamp's MediBot assignment (Advanced RAG, Hybrid
-Search, Reranking & Role-Based Access).
-
 ## Architecture
 
 ```
@@ -298,3 +295,8 @@ directly, below the level `test_rbac.py` exercises.
   Component 2's requirement that dense and sparse results be "queried together... not run as two
   separate queries and merged in application code" — and so a payload index can be created on
   `access_roles`, the field every retrieval query filters on for RBAC.
+
+---
+
+*Built for the Codebasics AI Engineering Bootcamp's MediBot assignment (Advanced RAG, Hybrid Search,
+Reranking & Role-Based Access).*
