@@ -1,9 +1,23 @@
 # MediBot — MediAssist Health Network Assistant
 
-An RBAC-aware internal assistant for MediAssist Health Network: a FastAPI backend with role-scoped
-hybrid retrieval and SQL analytics, and a Next.js chat frontend. All six components — document
-ingestion, hybrid dense+BM25 retrieval, cross-encoder reranking, SQL RAG, the FastAPI backend, and
-the frontend — are implemented; see [Implementation status](#implementation-status).
+An RBAC-aware internal assistant for MediAssist Health Network: a FastAPI backend that answers
+document questions with hybrid dense+BM25 retrieval and cross-encoder reranking, answers analytical
+questions by generating and executing SQL, and enforces role-based access at the retrieval layer
+itself rather than as a prompt instruction. Paired with a Next.js chat frontend.
+
+## Table of contents
+
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Role → collection access matrix](#role--collection-access-matrix)
+- [Demo credentials](#demo-credentials)
+- [Project layout](#project-layout)
+- [Setup](#setup)
+- [Pipeline modules](#pipeline-modules)
+- [Hybrid vs. dense-only retrieval](#hybrid-vs-dense-only-retrieval)
+- [SQL RAG — verified analytical questions](#sql-rag--verified-analytical-questions)
+- [RBAC verification (adversarial prompts)](#rbac-verification-adversarial-prompts)
+- [Tool substitutions](#tool-substitutions)
 
 ## Architecture
 
@@ -16,11 +30,11 @@ POST /chat  { question }  + Authorization: Bearer <token>
    ├─ analytical question? ──yes──► role in {billing_executive, admin}? ──no──► friendly RBAC refusal
    │                                        │yes
    │                                        ▼
-   │                                 sql_rag_chain(question)  (Component 4)
+   │                                 sql_rag_chain(question)
    │
    └─ no ──► question mentions a restricted collection? ──yes──► friendly RBAC refusal
               │
-              └─ no ──► hybrid_rag_answer(question, role)   (Components 2/3, RBAC-filtered)
+              └─ no ──► hybrid_rag_answer(question, role)   (RBAC-filtered)
                           → hybrid_search(question, role)   - dense+BM25, access_roles filter
                           → rerank(...)                     - top-10 narrowed to top-3
                           → LLM answer + citations
@@ -30,6 +44,21 @@ POST /chat  { question }  + Authorization: Bearer <token>
 are only ever called with the caller's own verified role, derived from the JWT - never trusted from
 the request body. A restricted document is never fetched from the vector store in the first place,
 so the LLM cannot leak it regardless of how the prompt is phrased.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Backend | FastAPI (Python) |
+| Frontend | Next.js 16 (App Router) |
+| Vector DB | Qdrant (dense + sparse hybrid search) |
+| Relational DB | SQLite |
+| Document parsing | Docling + `HybridChunker` |
+| Dense embeddings | `sentence-transformers/all-MiniLM-L6-v2` |
+| Sparse embeddings | FastEmbed (`Qdrant/bm25`) |
+| Reranker | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| LLM | Groq (`openai/gpt-oss-20b`) |
+| Auth | JWT (`python-jose`) + `bcrypt` |
 
 ## Role → collection access matrix
 
@@ -169,8 +198,8 @@ Open `http://localhost:3010`.
 
 ### Qdrant (required)
 
-All AI components are implemented, so Qdrant must be running for `/chat` to return real answers -
-there's no placeholder fallback left for a hybrid-RAG question if Qdrant is unreachable.
+Qdrant must be running for `/chat` to return real answers to document questions - there's no
+placeholder fallback for a hybrid-RAG question if Qdrant is unreachable.
 
 ```bash
 docker compose --profile ai up -d qdrant
@@ -195,22 +224,37 @@ Also set `LLM_API_KEY` in `backend/.env` (a free key from
 [console.groq.com/keys](https://console.groq.com/keys)) before asking anything that needs a real
 LLM answer - without it, `/chat` returns a 503 rather than a placeholder.
 
-## Implementation status
+## Pipeline modules
 
-All 6 components are implemented:
-
-| File | Component | What it does |
-|---|---|---|
-| `rag/ingestion.py` | 1 | Docling parsing + hierarchical chunking, dense+sparse embedding, upsert into Qdrant (raw `qdrant_client`, not `langchain-qdrant` - see Tool substitutions) |
-| `rag/retriever.py` | 2 | Single fused `query_points` call (dense + BM25, server-side RRF), filtered on `access_roles` |
-| `rag/reranker.py` | 3 | `CrossEncoder` reranking, narrows top-10 hybrid candidates to top-3 |
-| `rag/sql_rag.py` | 4 | `sql_rag_chain`: NL → SQL → clean → execute → NL, `SELECT`-only safety guard |
-| `rag/llm.py` | 2/3/4 | Shared Groq call (`openai/gpt-oss-20b`), used by the three above |
-| Components 5 & 6 | - | FastAPI backend + Next.js frontend |
+| File | What it does |
+|---|---|
+| `rag/ingestion.py` | Docling parsing + hierarchical chunking, dense+sparse embedding, upsert into Qdrant (raw `qdrant_client`, not `langchain-qdrant` - see Tool substitutions) |
+| `rag/retriever.py` | Single fused `query_points` call (dense + BM25, server-side RRF), filtered on `access_roles` |
+| `rag/reranker.py` | `CrossEncoder` reranking, narrows top-10 hybrid candidates to top-3 |
+| `rag/sql_rag.py` | `sql_rag_chain`: NL → SQL → clean → execute → NL, `SELECT`-only safety guard |
+| `rag/llm.py` | Shared Groq call (`openai/gpt-oss-20b`), used by retrieval, reranking, and SQL RAG |
+| `rag/orchestrator.py` | `hybrid_rag_answer`: calls retriever → reranker → llm in sequence, catches Qdrant/LLM outages and raises a 503 instead of a raw error |
+| `rag/vector_config.py` | Shared constants (embedding model names, Qdrant collection/vector names) used by both `ingestion.py` and `retriever.py`, so retrieval doesn't need to import ingestion's heavier Docling dependencies |
 
 `app/db/sqlite.py`'s `get_schema_summary()` feeds the real `claims`/`maintenance_tickets` schema
 into the SQL RAG prompt, including each low-cardinality column's actual values, so the model doesn't
 have to guess valid filter values.
+
+Example of a real ingested chunk (`billing` collection):
+
+```json
+{
+  "source_document": "claim_submission_guide.md",
+  "section_title": "1.1 Pre-authorisation timeline",
+  "chunk_type": "table",
+  "collection": "billing",
+  "access_roles": ["billing_executive", "admin"],
+  "chunk_text": "Claim Submission & Escalation Guide\n1. Cashless Claim Process\n1.1 Pre-authorisation timeline\n..."
+}
+```
+
+`chunk_text` is breadcrumb-prefixed with the document's heading path before embedding, so a chunk
+retrieved on its own still carries its place in the document's structure.
 
 ## Hybrid vs. dense-only retrieval
 
@@ -232,6 +276,24 @@ apart from other equipment sections. Hybrid's RRF fusion produces a decisive gap
 the correct section, dropping to 0.6667 and 0.5833 for sections about different equipment. The exact
 model-number match from BM25 pulls the right answer clearly ahead, precisely where dense-only nearly
 failed to distinguish it.
+
+## SQL RAG — verified analytical questions
+
+Four analytical questions run against the real `claims`/`maintenance_tickets` database
+(`billing_executive` role), each cross-checked against the database directly.
+
+| Question | Answer |
+|---|---|
+| How many billing claims are currently pending? | 17 |
+| How many billing claims were escalated? | 8 |
+| Which equipment category has the most open maintenance tickets? | Radiology, 4 tickets |
+| What is the total claimed amount for cardiology department claims? | ₹2,202,100 |
+
+All four return `retrieval_type: sql_rag` with an empty `sources` list (a database answer, not a
+document one). A broad, non-aggregating question (e.g. "Tell me about the claims") is steered
+toward `COUNT`/`AVG`/`GROUP BY` SQL rather than returning unaggregated rows, and the answer step
+only ever states numbers that are literally present in the query result - it never estimates from
+a partial row sample.
 
 ## RBAC verification (adversarial prompts)
 
@@ -264,7 +326,7 @@ directly, below the level `test_rbac.py` exercises.
 > called directly against `app/rag/retriever.py`, skipping `/chat`'s keyword-based refusal entirely
 > (that check is a UX nicety, not the security boundary - see
 > `app/rbac/keyword_heuristics.py`).
-> Result: 5/5 returned chunks were `general`, 0 were `billing` - proving the `access_roles` filter
+> Result: 10/10 returned chunks were `general`, 0 were `billing` - proving the `access_roles` filter
 > at the Qdrant query level holds independent of question wording, not just the chat layer's
 > keyword heuristic. This is the enforcement point the assignment actually grades ("Access must be
 > enforced at the Qdrant retrieval level using metadata filters on every query").
@@ -286,14 +348,13 @@ directly, below the level `test_rbac.py` exercises.
   (`docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`) with source mounted for
   hot-reload. A local Python venv is documented as an alternative (Option B in Setup) for running the
   backend without Docker.
-- **`langchain-qdrant` wrapper → raw `qdrant_client`, for ingestion (Component 1) and hybrid
-  retrieval (Component 2).** Chunks are embedded with `sentence-transformers` (dense) and
-  `fastembed`'s `Qdrant/bm25` model (sparse), then upserted as `PointStruct`s into a single Qdrant
-  collection with named `dense`/`sparse` vectors, instead of going through
-  `QdrantVectorStore.from_documents()`. Chosen so that retrieval can use Qdrant's native
-  `query_points(prefetch=[...], fusion=RRF)` — the fusion happens inside Qdrant itself, satisfying
-  Component 2's requirement that dense and sparse results be "queried together... not run as two
-  separate queries and merged in application code" — and so a payload index can be created on
+- **`langchain-qdrant` wrapper → raw `qdrant_client`, for ingestion and hybrid retrieval.** Chunks
+  are embedded with `sentence-transformers` (dense) and `fastembed`'s `Qdrant/bm25` model (sparse),
+  then upserted as `PointStruct`s into a single Qdrant collection with named `dense`/`sparse`
+  vectors, instead of going through `QdrantVectorStore.from_documents()`. Chosen so that retrieval
+  can use Qdrant's native `query_points(prefetch=[...], fusion=RRF)` — the fusion happens inside
+  Qdrant itself, so dense and sparse results are queried together in a single call rather than run
+  as two separate queries and merged in application code — and so a payload index can be created on
   `access_roles`, the field every retrieval query filters on for RBAC.
 
 ---
