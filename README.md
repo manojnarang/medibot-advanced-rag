@@ -101,6 +101,8 @@ backend/
     rag/          # AI components: ingestion.py, retriever.py, reranker.py, sql_rag.py, llm.py,
                   #   orchestrator.py (ties retriever+reranker+llm together), vector_config.py
   tests/          # pytest: auth + RBAC (including adversarial-prompt test)
+                  #   classifier_regression.py: live routing check against the real LLM, run manually
+                  #   with `python -m tests.classifier_regression` (needs LLM_API_KEY; not part of CI)
 frontend/
   app/            # Next.js App Router: /login, /chat
   components/     # LoginForm, ChatShell, Sidebar, MessageBubble, RoleBadge, ...
